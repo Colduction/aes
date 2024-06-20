@@ -32,7 +32,7 @@ func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 		return nil, InvalidDataError(lenInput)
 	}
 	if pad != nil {
-		if input, err = pad.Padding(input, block.BlockSize()); err != nil {
+		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
 			return nil, err
 		}
 	}
@@ -67,7 +67,7 @@ func (cbc) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, err
 	plaintextBytes := make([]byte, lenCt)
 	mode.CryptBlocks(plaintextBytes, ciphertext)
 	if pad != nil {
-		plaintextBytes, err = pad.Unpadding(plaintextBytes, block.BlockSize())
+		plaintextBytes, err = pad.Unpad(plaintextBytes, block.BlockSize())
 		if err != nil {
 			return nil, err
 		}

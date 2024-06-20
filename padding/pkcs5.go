@@ -3,7 +3,7 @@ package padding
 import "bytes"
 
 // Pads b to be a multiple of the block size using PKCS5
-func (pkcs5) Padding(b []byte, blocksize int) ([]byte, error) {
+func (pkcs5) Pad(b []byte, blocksize int) ([]byte, error) {
 	lenB := len(b)
 	if lenB == 0 {
 		return nil, InvalidDataError(lenB)
@@ -17,7 +17,7 @@ func (pkcs5) Padding(b []byte, blocksize int) ([]byte, error) {
 }
 
 // Removes the PKCS5 padding from b
-func (pkcs5) Unpadding(b []byte, blocksize int) ([]byte, error) {
+func (pkcs5) Unpad(b []byte, blocksize int) ([]byte, error) {
 	lenB := len(b)
 	if lenB == 0 {
 		return nil, InvalidDataError(lenB)

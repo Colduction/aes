@@ -3,8 +3,8 @@ package padding
 import "strconv"
 
 type Padding interface {
-	Padding(data []byte, blockSize int) ([]byte, error)
-	Unpadding(data []byte, blockSize int) ([]byte, error)
+	Pad(data []byte, blockSize int) ([]byte, error)
+	Unpad(data []byte, blockSize int) ([]byte, error)
 }
 
 type (
