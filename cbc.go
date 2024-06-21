@@ -28,13 +28,14 @@ func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	if err = IvSizeEquality(lenIv, block.BlockSize()); err != nil {
 		return nil, err
 	}
-	if lenInput%block.BlockSize() != 0 {
-		return nil, InvalidDataError(lenInput)
-	}
 	if pad != nil {
 		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
 			return nil, err
 		}
+		lenInput = len(input)
+	}
+	if lenInput%block.BlockSize() != 0 {
+		return nil, InvalidDataError(lenInput)
 	}
 	ct := make([]byte, lenInput)
 	mode := cipher.NewCBCEncrypter(block, iv)
@@ -64,13 +65,13 @@ func (cbc) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, err
 		return nil, err
 	}
 	mode := cipher.NewCBCDecrypter(block, iv)
-	plaintextBytes := make([]byte, lenCt)
-	mode.CryptBlocks(plaintextBytes, ciphertext)
+	ptBytes := make([]byte, lenCt)
+	mode.CryptBlocks(ptBytes, ciphertext)
 	if pad != nil {
-		plaintextBytes, err = pad.Unpad(plaintextBytes, block.BlockSize())
+		ptBytes, err = pad.Unpad(ptBytes, block.BlockSize())
 		if err != nil {
 			return nil, err
 		}
 	}
-	return plaintextBytes, nil
+	return ptBytes, nil
 }

@@ -1,38 +1,15 @@
 package padding
 
-import "bytes"
-
-// Pads b to be a multiple of the block size using PKCS5
+// Pad right-pads the given byte slice with 1 to n bytes, where
+// n is the block size. The size of the result is x times n, where x
+// is at least 1.
 func (pkcs5) Pad(b []byte, blocksize int) ([]byte, error) {
-	lenB := len(b)
-	if lenB == 0 {
-		return nil, InvalidDataError(lenB)
-	}
-	if blocksize <= 0 {
-		return nil, BlockSizeError(blocksize)
-	}
-	padding := blocksize - lenB%blocksize
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(b, padtext...), nil
+	return PKCS7.Pad(b, blocksize)
 }
 
-// Removes the PKCS5 padding from b
+// Unpad validates and unpads data from the given bytes slice.
+// The returned value will be 1 to n bytes smaller depending on the
+// amount of padding, where n is the block size.
 func (pkcs5) Unpad(b []byte, blocksize int) ([]byte, error) {
-	lenB := len(b)
-	if lenB == 0 {
-		return nil, InvalidDataError(lenB)
-	}
-	if lenB%blocksize != 0 {
-		return nil, InvalidDataError(lenB)
-	}
-	padding := int(b[lenB-1])
-	if padding > blocksize || padding == 0 {
-		return nil, InvalidDataError(lenB)
-	}
-	for i, bPad := 0, byte(padding); i < padding; i++ {
-		if b[lenB-1-i] != bPad {
-			return nil, InvalidDataError(lenB)
-		}
-	}
-	return b[:lenB-padding], nil
+	return PKCS7.Unpad(b, blocksize)
 }
