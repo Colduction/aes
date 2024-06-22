@@ -6,9 +6,15 @@ import (
 	"strconv"
 )
 
-type cbc struct{}
+type (
+	cbc struct{}
+	ecb struct{}
+)
 
-var CBC cbc
+var (
+	CBC cbc
+	ECB ecb
+)
 
 type (
 	BlockSizeError      int

@@ -13,6 +13,6 @@ Use go get.
 -   [x] CBC
 -   [ ] CFB
 -   [ ] CTR
--   [ ] ECB
+-   [x] ECB
 -   [ ] GCM
 -   [ ] OFB

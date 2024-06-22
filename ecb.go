@@ -2,17 +2,15 @@ package aes
 
 import (
 	stdaes "crypto/aes"
-	"crypto/cipher"
 
 	"github.com/colduction/aes/padding"
 )
 
-// Encrypts input using AES in CBC mode
-func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
+// Encrypts plaintext using AES in ECB mode
+func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
 	var (
 		lenInput int = len(input)
 		lenKey   int = len(key)
-		lenIv    int = len(iv)
 	)
 	if lenInput == 0 {
 		return nil, InvalidDataError(lenInput)
@@ -25,9 +23,6 @@ func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = IvSizeEquality(lenIv, block.BlockSize()); err != nil {
-		return nil, err
-	}
 	if pad != nil {
 		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
 			return nil, err
@@ -38,17 +33,17 @@ func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 		return nil, InvalidDataError(lenInput)
 	}
 	ct := make([]byte, lenInput)
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ct, input)
+	for bs, be := 0, block.BlockSize(); bs < len(input); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Encrypt(ct[bs:be], input[bs:be])
+	}
 	return ct, nil
 }
 
-// Decrypts ciphertext using AES in CBC mode
-func (cbc) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, error) {
+// Decrypts ciphertext using AES in ECB mode
+func (ecb) Decrypt(ciphertext, key []byte, pad padding.Padding) ([]byte, error) {
 	var (
 		lenCt  int   = len(ciphertext)
 		lenKey int   = len(key)
-		lenIv  int   = len(iv)
 		err    error = nil
 	)
 	if err = ValidKeySize(lenKey); err != nil {
@@ -61,12 +56,10 @@ func (cbc) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	if err = IvSizeEquality(lenIv, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	mode := cipher.NewCBCDecrypter(block, iv)
 	pt := make([]byte, lenCt)
-	mode.CryptBlocks(pt, ciphertext)
+	for bs, be := 0, block.BlockSize(); bs < len(ciphertext); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Decrypt(pt[bs:be], ciphertext[bs:be])
+	}
 	if pad != nil {
 		pt, err = pad.Unpad(pt, block.BlockSize())
 		if err != nil {
