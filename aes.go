@@ -8,12 +8,14 @@ import (
 
 type (
 	cbc struct{}
+	ctr struct{}
 	ecb struct{}
 )
 
 var (
-	CBC cbc
-	ECB ecb
+	CBC cbc // CBC (Cipher Block Chaining): Encrypts each block of plaintext with XOR chaining to the previous ciphertext block.
+	CTR ctr // CTR (Counter): Encrypts a counter value and XORs it with plaintext, effectively turning AES into a stream cipher.
+	ECB ecb // ECB (Electronic Codebook): Encrypts each block of plaintext independently.
 )
 
 type (

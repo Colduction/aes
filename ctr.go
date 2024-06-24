@@ -2,15 +2,17 @@ package aes
 
 import (
 	stdaes "crypto/aes"
+	"crypto/cipher"
 
 	"github.com/colduction/aes/padding"
 )
 
-// Encrypts input using AES in ECB mode
-func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
+// Encrypts input using AES in CTR mode
+func (ctr) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	var (
 		lenInput int = len(input)
 		lenKey   int = len(key)
+		lenIv    int = len(iv)
 	)
 	if lenInput == 0 {
 		return nil, InvalidDataError(lenInput)
@@ -23,6 +25,9 @@ func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = IvSizeEquality(lenIv, block.BlockSize()); err != nil {
+		return nil, err
+	}
 	if pad != nil {
 		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
 			return nil, err
@@ -33,17 +38,17 @@ func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
 		return nil, InvalidDataError(lenInput)
 	}
 	ct := make([]byte, lenInput)
-	for bs, be := 0, block.BlockSize(); bs < lenInput; bs, be = bs+block.BlockSize(), be+block.BlockSize() {
-		block.Encrypt(ct[bs:be], input[bs:be])
-	}
+	stream := cipher.NewCTR(block, iv)
+	stream.XORKeyStream(ct, input)
 	return ct, nil
 }
 
-// Decrypts ciphertext using AES in ECB mode
-func (ecb) Decrypt(ciphertext, key []byte, pad padding.Padding) ([]byte, error) {
+// Decrypts ciphertext using AES in CTR mode
+func (ctr) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	var (
 		lenCt  int   = len(ciphertext)
 		lenKey int   = len(key)
+		lenIv  int   = len(iv)
 		err    error = nil
 	)
 	if err = ValidKeySize(lenKey); err != nil {
@@ -56,10 +61,12 @@ func (ecb) Decrypt(ciphertext, key []byte, pad padding.Padding) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	pt := make([]byte, lenCt)
-	for bs, be := 0, block.BlockSize(); bs < lenCt; bs, be = bs+block.BlockSize(), be+block.BlockSize() {
-		block.Decrypt(pt[bs:be], ciphertext[bs:be])
+	if err = IvSizeEquality(lenIv, block.BlockSize()); err != nil {
+		return nil, err
 	}
+	mode := cipher.NewCTR(block, iv)
+	pt := make([]byte, lenCt)
+	mode.XORKeyStream(pt, ciphertext)
 	if pad != nil {
 		pt, err = pad.Unpad(pt, block.BlockSize())
 		if err != nil {
