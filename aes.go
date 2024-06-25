@@ -8,14 +8,18 @@ import (
 
 type (
 	cbc struct{}
+	cfb struct{}
 	ctr struct{}
 	ecb struct{}
+	ofb struct{}
 )
 
 var (
 	CBC cbc // CBC (Cipher Block Chaining): Encrypts each block of plaintext with XOR chaining to the previous ciphertext block.
+	CFB cfb // CFB (Cipher Feedback): Encrypts an IV and XORs it with plaintext segments, turning AES into a self-synchronizing stream cipher.
 	CTR ctr // CTR (Counter): Encrypts a counter value and XORs it with plaintext, effectively turning AES into a stream cipher.
 	ECB ecb // ECB (Electronic Codebook): Encrypts each block of plaintext independently.
+	OFB ofb // OFB (Output Feedback): Encrypts an IV to create a keystream, XORed with plaintext to produce ciphertext, making AES a stream cipher.
 )
 
 type (

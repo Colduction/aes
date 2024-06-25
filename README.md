@@ -11,8 +11,8 @@ Use go get.
 ## TODO
 
 -   [x] CBC
--   [ ] CFB
+-   [x] CFB
 -   [x] CTR
 -   [x] ECB
 -   [ ] GCM
--   [ ] OFB
+-   [x] OFB
