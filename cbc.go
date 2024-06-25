@@ -10,15 +10,15 @@ import (
 // Encrypts input using AES in CBC mode
 func (cbc) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	var (
-		lenInput int = len(input)
-		lenKey   int = len(key)
-		lenIv    int = len(iv)
+		lenInput int   = len(input)
+		lenKey   int   = len(key)
+		lenIv    int   = len(iv)
+		err      error = nil
 	)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
+	if err = EmptyData(lenInput); err != nil {
+		return nil, err
 	}
-	err := ValidKeySize(lenKey)
-	if err != nil {
+	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
 	}
 	block, err := stdaes.NewCipher(key)
@@ -51,6 +51,9 @@ func (cbc) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, err
 		lenIv  int   = len(iv)
 		err    error = nil
 	)
+	if err = EmptyData(lenCt); err != nil {
+		return nil, err
+	}
 	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
 	}

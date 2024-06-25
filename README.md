@@ -14,5 +14,5 @@ Use go get.
 -   [x] CFB
 -   [x] CTR
 -   [x] ECB
--   [ ] GCM
+-   [x] GCM
 -   [x] OFB

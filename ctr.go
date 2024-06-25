@@ -10,15 +10,15 @@ import (
 // Encrypts input using AES in CTR mode
 func (ctr) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 	var (
-		lenInput int = len(input)
-		lenKey   int = len(key)
-		lenIv    int = len(iv)
+		lenInput int   = len(input)
+		lenKey   int   = len(key)
+		lenIv    int   = len(iv)
+		err      error = nil
 	)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
+	if err = EmptyData(lenInput); err != nil {
+		return nil, err
 	}
-	err := ValidKeySize(lenKey)
-	if err != nil {
+	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
 	}
 	block, err := stdaes.NewCipher(key)
@@ -34,9 +34,6 @@ func (ctr) Encrypt(input, key, iv []byte, pad padding.Padding) ([]byte, error) {
 		}
 		lenInput = len(input)
 	}
-	if lenInput%block.BlockSize() != 0 {
-		return nil, InvalidDataError(lenInput)
-	}
 	ct := make([]byte, lenInput)
 	stream := cipher.NewCTR(block, iv)
 	stream.XORKeyStream(ct, input)
@@ -51,11 +48,11 @@ func (ctr) Decrypt(ciphertext, key, iv []byte, pad padding.Padding) ([]byte, err
 		lenIv  int   = len(iv)
 		err    error = nil
 	)
+	if err = EmptyData(lenCt); err != nil {
+		return nil, err
+	}
 	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
-	}
-	if lenCt%lenKey != 0 {
-		return nil, InvalidDataError(lenCt)
 	}
 	block, err := stdaes.NewCipher(key)
 	if err != nil {

@@ -11,6 +11,7 @@ type (
 	cfb struct{}
 	ctr struct{}
 	ecb struct{}
+	gcm struct{}
 	ofb struct{}
 )
 
@@ -19,19 +20,55 @@ var (
 	CFB cfb // CFB (Cipher Feedback): Encrypts an IV and XORs it with plaintext segments, turning AES into a self-synchronizing stream cipher.
 	CTR ctr // CTR (Counter): Encrypts a counter value and XORs it with plaintext, effectively turning AES into a stream cipher.
 	ECB ecb // ECB (Electronic Codebook): Encrypts each block of plaintext independently.
+	GCM gcm // GCM (Galois/Counter Mode): Combines CTR mode encryption with Galois mode for authentication, providing confidentiality and integrity.
 	OFB ofb // OFB (Output Feedback): Encrypts an IV to create a keystream, XORed with plaintext to produce ciphertext, making AES a stream cipher.
 )
 
 type (
-	BlockSizeError      int
-	InvalidDataError    int
-	IvSizeEqualityError int
-	IvSizeError         int
-	KeySizeError        int
+	BlockSizeError        int
+	EmptyDataError        int
+	GCMBlockSizeError     int
+	GCMDataSizeError      int
+	GCMKeySizeError       int
+	GCMNonceZeroSizeError int
+	GCMStdNonceSizeError  int
+	GCMTagSizeError       int
+	InvalidDataError      int
+	IvSizeEqualityError   int
+	IvSizeError           int
+	KeySizeError          int
 )
 
 func (i BlockSizeError) Error() string {
 	return "aes: invalid block size " + strconv.FormatInt(int64(i), 10)
+}
+
+func (EmptyDataError) Error() string {
+	return "aes: data is empty"
+}
+
+func (i GCMBlockSizeError) Error() string {
+	return "aes-gcm: invalid block size " + strconv.FormatInt(int64(i), 10) + ", it must equal 16 bytes"
+}
+
+func (i GCMKeySizeError) Error() string {
+	return "aes-gcm: invalid key size " + strconv.FormatInt(int64(i), 10) + ", it must equal 16 bytes"
+}
+
+func (GCMNonceZeroSizeError) Error() string {
+	return "aes-gcm: the nonce can't have zero length, or the security of the key will be immediately compromised"
+}
+
+func (i GCMStdNonceSizeError) Error() string {
+	return "aes-gcm: invalid nonce standard size " + strconv.FormatInt(int64(i), 10) + ", it must equal 12 bytes"
+}
+
+func (i GCMDataSizeError) Error() string {
+	return "aes-gcm: invalid data size " + strconv.FormatInt(int64(i), 10)
+}
+
+func (i GCMTagSizeError) Error() string {
+	return "aes-gcm: incorrect tag size " + strconv.FormatInt(int64(i), 10) + ", sizes betweeen 12 and 16 bytes are allowed"
 }
 
 func (i InvalidDataError) Error() string {
@@ -56,6 +93,13 @@ func GenerateRandomBytes(size int) ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+func EmptyData(length int) error {
+	if length <= 0 {
+		return EmptyData(length)
+	}
+	return nil
 }
 
 func ValidBlockSize(length int) error {

@@ -9,14 +9,14 @@ import (
 // Encrypts input using AES in ECB mode
 func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
 	var (
-		lenInput int = len(input)
-		lenKey   int = len(key)
+		lenInput int   = len(input)
+		lenKey   int   = len(key)
+		err      error = nil
 	)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
+	if err = EmptyData(lenInput); err != nil {
+		return nil, err
 	}
-	err := ValidKeySize(lenKey)
-	if err != nil {
+	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
 	}
 	block, err := stdaes.NewCipher(key)
@@ -46,6 +46,9 @@ func (ecb) Decrypt(ciphertext, key []byte, pad padding.Padding) ([]byte, error) 
 		lenKey int   = len(key)
 		err    error = nil
 	)
+	if err = EmptyData(lenCt); err != nil {
+		return nil, err
+	}
 	if err = ValidKeySize(lenKey); err != nil {
 		return nil, KeySizeError(lenKey)
 	}
