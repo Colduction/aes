@@ -1,117 +1,119 @@
+// Package aes implements convenience helpers for AES block cipher modes.
 package aes
 
 import (
+	stdaes "crypto/aes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 )
 
-type (
-	cbc struct{}
-	cfb struct{}
-	ctr struct{}
-	ecb struct{}
-	gcm struct{}
-	ofb struct{}
+// Mode identifies an AES mode of operation.
+type Mode uint8
+
+const (
+	// ModeCBC selects cipher block chaining mode.
+	ModeCBC Mode = iota + 1
+
+	// ModeCFB selects cipher feedback mode.
+	ModeCFB
+
+	// ModeCTR selects counter mode.
+	ModeCTR
+
+	// ModeECB selects electronic codebook mode.
+	ModeECB
+
+	// ModeIGE selects infinite garble extension mode.
+	ModeIGE
+
+	// ModeOFB selects output feedback mode.
+	ModeOFB
 )
 
-var (
-	CBC cbc // CBC (Cipher Block Chaining): Encrypts each block of plaintext with XOR chaining to the previous ciphertext block.
-	CFB cfb // CFB (Cipher Feedback): Encrypts an IV and XORs it with plaintext segments, turning AES into a self-synchronizing stream cipher.
-	CTR ctr // CTR (Counter): Encrypts a counter value and XORs it with plaintext, effectively turning AES into a stream cipher.
-	ECB ecb // ECB (Electronic Codebook): Encrypts each block of plaintext independently.
-	GCM gcm // GCM (Galois/Counter Mode): Combines CTR mode encryption with Galois mode for authentication, providing confidentiality and integrity.
-	OFB ofb // OFB (Output Feedback): Encrypts an IV to create a keystream, XORed with plaintext to produce ciphertext, making AES a stream cipher.
+const (
+	// IGEIVSize is the size, in bytes, of an IGE initialization vector.
+	IGEIVSize = stdaes.BlockSize << 1
+
+	blockMask = stdaes.BlockSize - 1
+
+	// KeySize128 is the size, in bytes, of an AES-128 key.
+	KeySize128 = 16
+
+	// KeySize192 is the size, in bytes, of an AES-192 key.
+	KeySize192 = 24
+
+	// KeySize256 is the size, in bytes, of an AES-256 key.
+	KeySize256 = 32
 )
 
-type (
-	BlockSizeError         int
-	EmptyDataError         int
-	InvalidCiphertextError int
-	InvalidDataError       int
-	IvSizeEqualityError    int
-	IvSizeError            int
-	KeySizeError           int
-)
+// ErrUnknownMode is returned when New is called with an unknown mode.
+var ErrUnknownMode = errors.New("aes: unknown cipher mode")
 
-func (i BlockSizeError) Error() string {
-	return fmt.Sprintf("aes: invalid block size %d", int(i))
+// KeySizeError is returned when an AES key has the wrong length.
+type KeySizeError int
+
+func (e KeySizeError) Error() string {
+	return fmt.Sprintf("aes: invalid key size %d: must be 16, 24, or 32 bytes", int(e))
 }
 
-func (i InvalidCiphertextError) Error() string {
-	if i == 0 {
-		return "aes: empty ciphertext"
+// IvSizeError is returned when an initialization vector has the wrong length.
+type IvSizeError int
+
+func (e IvSizeError) Error() string {
+	return fmt.Sprintf("aes: invalid IV size %d: must be %d bytes", int(e), stdaes.BlockSize)
+}
+
+// IgeIvSizeError is returned when an IGE initialization vector has the wrong length.
+type IgeIvSizeError int
+
+func (e IgeIvSizeError) Error() string {
+	return fmt.Sprintf("aes: invalid IGE IV size %d: must be %d bytes", int(e), IGEIVSize)
+}
+
+// InvalidDataError is returned when plaintext is empty or not block aligned.
+type InvalidDataError int
+
+func (e InvalidDataError) Error() string {
+	if e == 0 {
+		return "aes: plaintext is empty"
 	}
-	return fmt.Sprintf("aes: ciphertext size is not multiple of the block size: %d", int(i))
+	return fmt.Sprintf("aes: plaintext length %d is not a multiple of the block size", int(e))
 }
 
-func (i InvalidDataError) Error() string {
-	if i == 0 {
-		return "aes: empty data"
+// InvalidCiphertextError is returned when ciphertext is empty or not block aligned.
+type InvalidCiphertextError int
+
+func (e InvalidCiphertextError) Error() string {
+	if e == 0 {
+		return "aes: ciphertext is empty"
 	}
-	return fmt.Sprintf("aes: data size is not multiple of the block size: %d", int(i))
+	return fmt.Sprintf("aes: ciphertext length %d is not a multiple of the block size", int(e))
 }
 
-func (i IvSizeEqualityError) Error() string {
-	return fmt.Sprintf("aes: iv size is not equal to the block size: %d", int(i))
-}
-
-func (i IvSizeError) Error() string {
-	return fmt.Sprintf("aes: invalid iv size: %d", int(i))
-}
-
-func (k KeySizeError) Error() string {
-	return fmt.Sprintf("aes: invalid key size: %d", int(k))
-}
-
-func GenerateRandomBytes(size int) ([]byte, error) {
-	b := make([]byte, size)
+// GenerateRandomBytes returns n cryptographically secure random bytes.
+func GenerateRandomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-func ValidBlockSize(length int) error {
-	switch length {
-	case 16, 24, 32:
-		return nil
-	}
-	return BlockSizeError(length)
+// GenerateIV returns a new random AES initialization vector.
+func GenerateIV() ([]byte, error) {
+	return GenerateRandomBytes(stdaes.BlockSize)
 }
 
-func ValidKeySize(length int) error {
-	switch length {
-	case 16, 24, 32:
-		return nil
+// GenerateKey returns a new random AES key of the given size.
+//
+// The size must be [KeySize128], [KeySize192], or [KeySize256].
+func GenerateKey(size int) ([]byte, error) {
+	switch size {
+	case KeySize128, KeySize192, KeySize256:
+	default:
+		return nil, KeySizeError(size)
 	}
-	return KeySizeError(length)
-}
-
-func ValidIvSize(length int) error {
-	switch length {
-	case 16, 24, 32:
-		return nil
-	}
-	return IvSizeError(length)
-}
-
-func ValidCiphertext(length, blocksize int) error {
-	if length%blocksize != 0 {
-		return InvalidCiphertextError(length)
-	}
-	return nil
-}
-
-func IvSizeEquality(length, blocksize int) (err error) {
-	if err = ValidIvSize(length); err != nil {
-		return err
-	}
-	if err = ValidBlockSize(blocksize); err != nil {
-		return err
-	}
-	if length != blocksize {
-		return IvSizeEqualityError(length)
-	}
-	return err
+	return GenerateRandomBytes(size)
 }

@@ -4,10 +4,11 @@ import (
 	stdaes "crypto/aes"
 	"crypto/cipher"
 
+	aesinternal "github.com/colduction/aes-go/internal/aes"
 	"github.com/colduction/aes-go/padding"
 )
 
-func encryptCBC(block cipher.Block, src, iv []byte, pad padding.Padding) ([]byte, error) {
+func encryptIGE(block cipher.Block, src, iv []byte, pad padding.Padding) ([]byte, error) {
 	var err error
 	if pad != nil {
 		if src, err = pad.Pad(src, stdaes.BlockSize); err != nil {
@@ -19,17 +20,17 @@ func encryptCBC(block cipher.Block, src, iv []byte, pad padding.Padding) ([]byte
 		return nil, InvalidDataError(n)
 	}
 	dst := make([]byte, n)
-	cipher.NewCBCEncrypter(block, iv).CryptBlocks(dst, src)
+	aesinternal.NewIGEEncrypter(block, iv).CryptBlocks(dst, src)
 	return dst, nil
 }
 
-func decryptCBC(block cipher.Block, src, iv []byte, pad padding.Padding) ([]byte, error) {
+func decryptIGE(block cipher.Block, src, iv []byte, pad padding.Padding) ([]byte, error) {
 	n := len(src)
 	if n&blockMask != 0 {
 		return nil, InvalidCiphertextError(n)
 	}
 	dst := make([]byte, n)
-	cipher.NewCBCDecrypter(block, iv).CryptBlocks(dst, src)
+	aesinternal.NewIGEDecrypter(block, iv).CryptBlocks(dst, src)
 	if pad != nil {
 		return pad.Unpad(dst, stdaes.BlockSize)
 	}

@@ -2,58 +2,40 @@ package aes
 
 import (
 	stdaes "crypto/aes"
+	"crypto/cipher"
 
-	"github.com/colduction/aes/padding"
+	"github.com/colduction/aes-go/padding"
 )
 
-// Encrypts input using AES in ECB mode
-func (ecb) Encrypt(input, key []byte, pad padding.Padding) ([]byte, error) {
-	lenInput := len(input)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
-	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
+func encryptECB(block cipher.Block, src []byte, pad padding.Padding) ([]byte, error) {
+	var err error
 	if pad != nil {
-		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
+		if src, err = pad.Pad(src, stdaes.BlockSize); err != nil {
 			return nil, err
 		}
-		lenInput = len(input)
 	}
-	if lenInput%block.BlockSize() != 0 {
-		return nil, InvalidDataError(lenInput)
+	n := len(src)
+	if n&blockMask != 0 {
+		return nil, InvalidDataError(n)
 	}
-	ct := make([]byte, lenInput)
-	for bs, be := 0, block.BlockSize(); bs < lenInput; bs, be = bs+block.BlockSize(), be+block.BlockSize() {
-		block.Encrypt(ct[bs:be], input[bs:be])
+	dst := make([]byte, n)
+	for i := 0; i < n; i += stdaes.BlockSize {
+		block.Encrypt(dst[i:i+stdaes.BlockSize], src[i:i+stdaes.BlockSize])
 	}
-	return ct, nil
+	return dst, nil
 }
 
-// Decrypts ciphertext using AES in ECB mode
-func (ecb) Decrypt(ciphertext, key []byte, pad padding.Padding) ([]byte, error) {
-	lenCt := len(ciphertext)
-	if lenCt == 0 {
-		return nil, InvalidCiphertextError(lenCt)
+func decryptECB(block cipher.Block, src []byte, pad padding.Padding) ([]byte, error) {
+	n := len(src)
+	if n&blockMask != 0 {
+		return nil, InvalidCiphertextError(n)
 	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = ValidCiphertext(lenCt, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	pt := make([]byte, lenCt)
-	for bs, be := 0, block.BlockSize(); bs < lenCt; bs, be = bs+block.BlockSize(), be+block.BlockSize() {
-		block.Decrypt(pt[bs:be], ciphertext[bs:be])
+	dst := make([]byte, n)
+	for i := 0; i < n; i += stdaes.BlockSize {
+		block.Decrypt(dst[i:i+stdaes.BlockSize], src[i:i+stdaes.BlockSize])
 	}
 	if pad != nil {
-		pt, err = pad.Unpad(pt, block.BlockSize())
-		if err != nil {
-			return nil, err
-		}
+		return pad.Unpad(dst, stdaes.BlockSize)
 	}
-	return pt, nil
+	return dst, nil
 }

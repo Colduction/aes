@@ -4,239 +4,134 @@ import (
 	stdaes "crypto/aes"
 	"crypto/cipher"
 	"fmt"
-	"strconv"
-
-	"github.com/colduction/aes/padding"
 )
 
 const (
-	gcmBlockSize    int = 16
-	gcmMinTagSize   int = 12
-	gcmStdNonceSize int = gcmMinTagSize
+	gcmStdNonceSize = 12
+	gcmMinTagSize   = 12
+	gcmMaxTagSize   = stdaes.BlockSize
 )
 
-type (
-	GCMDataSizeError     int
-	GCMStdNonceSizeError int
-	GCMTagSizeError      int
-)
+// GCMNonceSizeError is returned when an AES-GCM nonce has the wrong length.
+type GCMNonceSizeError int
 
-func (i GCMStdNonceSizeError) Error() string {
-	return fmt.Sprintf("aes-gcm: invalid nonce standard size %s, it must equal 12 bytes", strconv.FormatInt(int64(i), 10))
+func (e GCMNonceSizeError) Error() string {
+	return fmt.Sprintf("aes-gcm: invalid nonce size %d: nonce must be > 0 bytes", int(e))
 }
 
-func (i GCMDataSizeError) Error() string {
-	return fmt.Sprintf("aes-gcm: invalid data size %s", strconv.FormatInt(int64(i), 10))
+// GCMTagSizeError is returned when an AES-GCM tag has the wrong length.
+type GCMTagSizeError int
+
+func (e GCMTagSizeError) Error() string {
+	return fmt.Sprintf("aes-gcm: invalid tag size %d: must be between %d and %d bytes", int(e), gcmMinTagSize, gcmMaxTagSize)
 }
 
-func (i GCMTagSizeError) Error() string {
-	return fmt.Sprintf("aes-gcm: incorrect tag size %s, sizes betweeen 12 and 16 bytes are allowed", strconv.FormatInt(int64(i), 10))
+// GCMDataSizeError is returned when AES-GCM plaintext is too large.
+type GCMDataSizeError int
+
+func (e GCMDataSizeError) Error() string {
+	return fmt.Sprintf("aes-gcm: plaintext too large (%d bytes)", int(e))
 }
 
-func (gcm) ValidStdNonceSize(length int) error {
-	if length != gcmStdNonceSize {
-		return GCMStdNonceSizeError(length)
-	}
-	return nil
+// gcmCipher is a reusable AES-GCM authenticated encryption cipher.
+type gcmCipher struct {
+	aead           cipher.AEAD
+	nonce          []byte
+	additionalData []byte
 }
 
-func (gcm) ValidTagSize(length int) error {
-	if length < gcmMinTagSize || length > gcmBlockSize {
-		return GCMTagSizeError(length)
-	}
-	return nil
+var _ AEADCipher = (*gcmCipher)(nil)
+
+// NewGCM returns a new AES-GCM cipher with the standard 16-byte tag.
+//
+// The key must be 16, 24, or 32 bytes. The nonce must not be reused with the
+// same key. A 12-byte nonce is recommended.
+func NewGCM(key, nonce, additionalData []byte) (AEADCipher, error) {
+	return newGCMCipher(key, nonce, additionalData, 0)
 }
 
-func (gcm) ValidDataSize(length, blocksize int) error {
-	if uint64(length) > ((1<<32)-2)*uint64(blocksize) {
-		return GCMDataSizeError(length)
-	}
-	return nil
+// NewGCMWithTagSize returns a new AES-GCM cipher with a custom tag size.
+//
+// The tagSize must be between 12 and 16 bytes. The nonce must be 12 bytes.
+func NewGCMWithTagSize(key, nonce, additionalData []byte, tagSize int) (AEADCipher, error) {
+	return newGCMCipher(key, nonce, additionalData, tagSize)
 }
 
-// Encrypts input using AES in GCM mode
-func (gcm) Encrypt(input, key, nonce, additionalData []byte, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenInput := len(input)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
-	}
-	err := GCM.ValidStdNonceSize(len(nonce))
-	if err != nil {
-		return nil, err
+func newGCMCipher(key, nonce, additionalData []byte, tagSize int) (AEADCipher, error) {
+	if len(nonce) == 0 {
+		return nil, GCMNonceSizeError(0)
 	}
 	block, err := stdaes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, KeySizeError(len(key))
 	}
-	if err = GCM.ValidDataSize(lenInput, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
-			return nil, err
+
+	var aead cipher.AEAD
+	switch {
+	case tagSize != 0:
+		if tagSize < gcmMinTagSize || tagSize > gcmMaxTagSize {
+			return nil, GCMTagSizeError(tagSize)
 		}
+		if len(nonce) != gcmStdNonceSize {
+			return nil, GCMNonceSizeError(len(nonce))
+		}
+		aead, err = cipher.NewGCMWithTagSize(block, tagSize)
+	case len(nonce) != gcmStdNonceSize:
+		aead, err = cipher.NewGCMWithNonceSize(block, len(nonce))
+	default:
+		aead, err = cipher.NewGCM(block)
 	}
-	aed, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
 	}
-	return aed.Seal(dst, nonce, input, additionalData), nil
+
+	nonceCopy := make([]byte, len(nonce))
+	copy(nonceCopy, nonce)
+
+	var aadCopy []byte
+	if n := len(additionalData); n > 0 {
+		aadCopy = make([]byte, n)
+		copy(aadCopy, additionalData)
+	}
+
+	return &gcmCipher{aead: aead, nonce: nonceCopy, additionalData: aadCopy}, nil
 }
 
-// Encrypts input using AES in GCM mode with custom nonce size and default tag size (16)
-func (gcm) EncryptWithNonceSize(input, key, nonce, additionalData []byte, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenInput := len(input)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
-	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidDataSize(lenInput, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
-			return nil, err
-		}
-	}
-	aed, err := cipher.NewGCMWithNonceSize(block, len(nonce))
-	if err != nil {
-		return nil, err
-	}
-	return aed.Seal(dst, nonce, input, additionalData), nil
+// NonceSize returns the required nonce size.
+func (c *gcmCipher) NonceSize() int {
+	return c.aead.NonceSize()
 }
 
-// Encrypts input using AES in GCM mode with custom tag size and default nonce size (12)
-func (gcm) EncryptWithTagSize(input, key, nonce, additionalData []byte, tagSize int, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenInput := len(input)
-	if lenInput == 0 {
-		return nil, InvalidDataError(lenInput)
-	}
-	err := GCM.ValidStdNonceSize(len(nonce))
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidTagSize(tagSize); err != nil {
-		return nil, err
-	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidDataSize(lenInput, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		if input, err = pad.Pad(input, block.BlockSize()); err != nil {
-			return nil, err
-		}
-	}
-	aed, err := cipher.NewGCMWithTagSize(block, tagSize)
-	if err != nil {
-		return nil, err
-	}
-	return aed.Seal(dst, nonce, input, additionalData), nil
+// Overhead returns the number of bytes added by Seal.
+func (c *gcmCipher) Overhead() int {
+	return c.aead.Overhead()
 }
 
-// Decrypts ciphertext using AES in GCM mode
-func (gcm) Decrypt(ciphertext, key, nonce, additionalData []byte, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenCt := len(ciphertext)
-	if lenCt == 0 {
-		return nil, InvalidCiphertextError(lenCt)
-	}
-	err := GCM.ValidStdNonceSize(len(nonce))
-	if err != nil {
-		return nil, err
-	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidDataSize(lenCt, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	mode, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	pt, err := mode.Open(dst, nonce, ciphertext, additionalData)
-	if err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		pt, err = pad.Unpad(pt, block.BlockSize())
-		if err != nil {
-			return nil, err
-		}
-	}
-	return pt, nil
+// Seal encrypts and authenticates plaintext, appending the result to dst.
+func (c *gcmCipher) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+	return c.aead.Seal(dst, nonce, plaintext, additionalData)
 }
 
-// Decrypts ciphertext using AES in GCM mode with custom nonce size and default tag size (16)
-func (gcm) DecryptWithNonceSize(ciphertext, key, nonce, additionalData []byte, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenCt := len(ciphertext)
-	if lenCt == 0 {
-		return nil, InvalidCiphertextError(lenCt)
-	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidDataSize(lenCt, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	mode, err := cipher.NewGCMWithNonceSize(block, len(nonce))
-	if err != nil {
-		return nil, err
-	}
-	pt, err := mode.Open(dst, nonce, ciphertext, additionalData)
-	if err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		pt, err = pad.Unpad(pt, block.BlockSize())
-		if err != nil {
-			return nil, err
-		}
-	}
-	return pt, nil
+// Open authenticates and decrypts ciphertext, appending the result to dst.
+func (c *gcmCipher) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
+	return c.aead.Open(dst, nonce, ciphertext, additionalData)
 }
 
-// Decrypts ciphertext using AES in GCM mode with custom tag size and default nonce size (12)
-func (gcm) DecryptWithTagSize(ciphertext, key, nonce, additionalData []byte, tagSize int, pad padding.Padding, dst ...byte) ([]byte, error) {
-	lenCt := len(ciphertext)
-	if lenCt == 0 {
-		return nil, InvalidCiphertextError(lenCt)
+// Encrypt encrypts plaintext and appends the authentication tag to the ciphertext.
+func (c *gcmCipher) Encrypt(plaintext []byte) ([]byte, error) {
+	if len(plaintext) == 0 {
+		return nil, InvalidDataError(0)
 	}
-	err := GCM.ValidStdNonceSize(len(nonce))
-	if err != nil {
-		return nil, err
+	if uint64(len(plaintext)) > (1<<32-2)*uint64(stdaes.BlockSize) {
+		return nil, GCMDataSizeError(len(plaintext))
 	}
-	if err = GCM.ValidTagSize(tagSize); err != nil {
-		return nil, err
+	return c.aead.Seal(nil, c.nonce, plaintext, c.additionalData), nil
+}
+
+// Decrypt authenticates and decrypts ciphertext.
+func (c *gcmCipher) Decrypt(ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) == 0 {
+		return nil, InvalidCiphertextError(0)
 	}
-	block, err := stdaes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	if err = GCM.ValidDataSize(lenCt, block.BlockSize()); err != nil {
-		return nil, err
-	}
-	mode, err := cipher.NewGCMWithTagSize(block, tagSize)
-	if err != nil {
-		return nil, err
-	}
-	pt, err := mode.Open(dst, nonce, ciphertext, additionalData)
-	if err != nil {
-		return nil, err
-	}
-	if pad != nil {
-		pt, err = pad.Unpad(pt, block.BlockSize())
-		if err != nil {
-			return nil, err
-		}
-	}
-	return pt, nil
+	return c.aead.Open(nil, c.nonce, ciphertext, c.additionalData)
 }

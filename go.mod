@@ -1,3 +1,3 @@
-module github.com/colduction/aes
+module github.com/colduction/aes-go
 
-go 1.22.5
+go 1.26.3

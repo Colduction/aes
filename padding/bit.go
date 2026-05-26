@@ -1,12 +1,10 @@
 package padding
 
-import "bytes"
-
 func (bit) String() string {
 	return "BitPadding"
 }
 
-// Pad pads the b with bit padding.
+// Pad appends 0x80 followed by zero bytes until b is a multiple of blocksize.
 func (bit) Pad(b []byte, blocksize int) ([]byte, error) {
 	lenB := len(b)
 	if lenB == 0 {
@@ -15,16 +13,16 @@ func (bit) Pad(b []byte, blocksize int) ([]byte, error) {
 	if blocksize <= 0 {
 		return nil, BlockSizeError(blocksize)
 	}
-	overhead := OverheadSize(lenB, blocksize)
-	padtext := append(b, 0x80)
-	overhead--
-	if overhead > 0 {
-		padtext = append(padtext, bytes.Repeat([]byte{0x00}, overhead)...)
-	}
-	return padtext, nil
+	var (
+		overhead = OverheadSize(lenB, blocksize)
+		padded   = make([]byte, lenB+overhead)
+	)
+	copy(padded, b)
+	padded[lenB] = 0x80
+	return padded, nil
 }
 
-// Unpad removes the bit padding from the b.
+// Unpad removes bit padding: strip trailing 0x00 bytes, then the 0x80 marker.
 func (bit) Unpad(b []byte, blocksize int) ([]byte, error) {
 	lenB := len(b)
 	if lenB == 0 {
@@ -33,16 +31,15 @@ func (bit) Unpad(b []byte, blocksize int) ([]byte, error) {
 	if blocksize <= 0 {
 		return nil, BlockSizeError(blocksize)
 	}
-	if lenB%blocksize != 0 {
+	if lenB&(blocksize-1) != 0 {
 		return nil, InvalidDataError(lenB)
 	}
-	for lenB > 0 && b[lenB-1] == 0x00 {
-		lenB--
+	i := lenB - 1
+	for i > 0 && b[i] == 0x00 {
+		i--
 	}
-	if lenB > 0 && b[lenB-1] == 0x80 {
-		lenB--
-	} else {
+	if b[i] != 0x80 {
 		return nil, InvalidDataError(lenB)
 	}
-	return b[:lenB], nil
+	return b[:i], nil
 }
